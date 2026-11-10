@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rifa</title>
+<style>
+  :root { --verde:#1b8a4b; --azul:#1f5fbf; --cinza:#d9dde3; --vermelho:#b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: Segoe UI, Arial, sans-serif; margin: 0; background:#f4f6f9; color:#1d2530; padding-bottom: 6rem; }
+  header { background: var(--azul); color:#fff; padding: 1.2rem 1rem; text-align:center; }
+  header h1 { margin:0 0 .25rem; font-size:1.6rem; }
+  header p { margin:0; }
+  main { max-width: 960px; margin: 0 auto; padding: 1rem; }
+  .legenda { display:flex; gap:1rem; flex-wrap:wrap; margin:.5rem 0 1rem; font-size:.9rem; }
+  .legenda span::before { content:""; display:inline-block; width:1rem; height:1rem; margin-right:.35rem; vertical-align:-2px; border-radius:3px; border:1px solid #888; }
+  .legenda .l::before { background:#fff; }
+  .legenda .s::before { background:var(--verde); }
+  .legenda .v::before { background:var(--cinza); }
+  #grade { display:grid; grid-template-columns: repeat(auto-fill, minmax(3.6rem, 1fr)); gap:.5rem; }
+  #grade button { padding:.7rem 0; font-size:1rem; border:1px solid #8a94a3; border-radius:6px; background:#fff; cursor:pointer; color:#1d2530; }
+  #grade button:hover:not(:disabled) { border-color: var(--azul); }
+  #grade button[aria-pressed="true"] { background:var(--verde); border-color:var(--verde); color:#fff; font-weight:600; }
+  #grade button:disabled { background:var(--cinza); color:#7a828d; text-decoration: line-through; cursor:not-allowed; }
+  button:focus-visible, input:focus-visible { outline:3px solid #ffb703; outline-offset:2px; }
+
+  #barra { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid #c5ccd6; padding:.8rem 1rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+  #barra .info { font-size:1rem; }
+  .btn { padding:.7rem 1.3rem; font-size:1rem; border:0; border-radius:6px; background:var(--azul); color:#fff; cursor:pointer; }
+  .btn:disabled { background:#9aa5b5; cursor:not-allowed; }
+  .btn.sec { background:#fff; color:var(--azul); border:1px solid var(--azul); }
+
+  .fundo { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:1rem; z-index:10; }
+  .fundo.aberto { display:flex; }
+  .janela { background:#fff; border-radius:10px; max-width:480px; width:100%; max-height:90vh; overflow:auto; padding:1.4rem; }
+  .janela h2 { margin-top:0; }
+  .janela label { display:block; margin:.8rem 0 .25rem; font-weight:600; }
+  .janela input[type=text], .janela input[type=file] { width:100%; padding:.55rem; font-size:1rem; border:1px solid #8a94a3; border-radius:6px; }
+  .acoes { display:flex; gap:.6rem; justify-content:flex-end; margin-top:1.2rem; flex-wrap:wrap; }
+  .caixa { background:#eef3fb; border:1px solid #c3d3ee; border-radius:6px; padding:.7rem; margin:.6rem 0; word-break:break-all; }
+  .erro { color:var(--vermelho); margin:.6rem 0 0; min-height:1.2rem; }
+  .obrigado { text-align:center; }
+  .obrigado .ok { font-size:3rem; color:var(--verde); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="titulo">Rifa</h1>
+  <p id="subtitulo">Carregando...</p>
+</header>
+
+<main>
+  <div class="legenda" aria-hidden="true">
+    <span class="l">Livre</span><span class="s">Selecionado</span><span class="v">Indisponível</span>
+  </div>
+  <div id="grade" role="group" aria-label="Números da rifa"></div>
+</main>
+
+<div id="barra">
+  <div class="info" aria-live="polite">
+    <span id="qtd">0</span> número(s) selecionado(s) &middot; Total: <strong id="total">R$ 0,00</strong>
+  </div>
+  <button class="btn" id="btnConfirmar" disabled>Confirmar números</button>
+</div>
+
+<!-- Janela 1: valor e forma de pagamento -->
+<div class="fundo" id="j1" role="dialog" aria-modal="true" aria-labelledby="j1t">
+  <div class="janela">
+    <h2 id="j1t">Pagamento</h2>
+    <p>Números: <strong id="j1nums"></strong></p>
+    <p>Valor a pagar: <strong id="j1valor"></strong></p>
+    <p>Forma de pagamento: <strong>PIX</strong></p>
+    <div class="caixa">
+      <div>Chave PIX: <strong id="j1pix"></strong></div>
+      <div>Favorecido: <strong id="j1fav"></strong></div>
+    </div>
+    <p id="j1instr"></p>
+    <div class="acoes">
+      <button class="btn sec" id="j1copiar" type="button">Copiar chave PIX</button>
+      <button class="btn sec" id="j1voltar" type="button">Voltar</button>
+      <button class="btn" id="j1avancar" type="button">Já paguei, anexar comprovante</button>
+    </div>
+  </div>
+</div>
+
+<!-- Janela 2: anexar comprovante -->
+<div class="fundo" id="j2" role="dialog" aria-modal="true" aria-labelledby="j2t">
+  <form class="janela" id="form" novalidate>
+    <h2 id="j2t">Comprovante de pagamento</h2>
+    <label for="nome">Seu nome</label>
+    <input type="text" id="nome" maxlength="100" autocomplete="name" required />
+    <label for="contato">Telefone ou e-mail (opcional)</label>
+    <input type="text" id="contato" maxlength="60" autocomplete="off" />
+    <label for="arquivo">Comprovante (JPG, PNG ou PDF, até 5 MB)</label>
+    <input type="file" id="arquivo" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required />
+    <p class="erro" id="erro" role="alert"></p>
+    <div class="acoes">
+      <button class="btn sec" id="j2voltar" type="button">Voltar</button>
+      <button class="btn" id="j2enviar" type="submit">Confirmar pagamento</button>
+    </div>
+  </form>
+</div>
+
+<!-- Janela 3: agradecimento -->
+<div class="fundo" id="j3" role="dialog" aria-modal="true" aria-labelledby="j3t">
+  <div class="janela obrigado">
+    <div class="ok" aria-hidden="true">&#10003;</div>
+    <h2 id="j3t">Muito obrigado!</h2>
+    <p>Recebemos seu comprovante. Seus números estão reservados:</p>
+    <p><strong id="j3nums"></strong></p>
+    <p>Boa sorte!</p>
+    <div class="acoes"><button class="btn" id="j3fechar" type="button">Fechar</button></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var cfg = null;
+  var vendidos = {};
+  var selecionados = {};
+  var enviando = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var moeda = function (v) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); };
+  var listaSel = function () {
+    return Object.keys(selecionados).map(Number).sort(function (a, b) { return a - b; });
+  };
+
+  function abrir(id) { $(id).classList.add('aberto'); }
+  function fechar(id) { $(id).classList.remove('aberto'); }
+
+  function carregar(primeira) {
+    return fetch('api.ashx?action=status', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.erro);
+        cfg = d;
+        vendidos = {};
+        d.vendidos.forEach(function (n) { vendidos[n] = true; delete selecionados[n]; });
+        if (primeira) {
+          document.title = d.nome;
+          $('titulo').textContent = d.nome;
+          $('subtitulo').textContent = d.total + ' números \u00b7 ' + moeda(d.valor) + ' cada';
+        }
+        desenhar();
+      })
+      .catch(function () {
+        if (primeira) $('subtitulo').textContent = 'Não foi possível carregar. Atualize a página.';
+      });
+  }
+
+  function desenhar() {
+    var grade = $('grade');
+    grade.innerHTML = '';
+    for (var n = 1; n <= cfg.total; n++) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = n;
+      b.dataset.n = n;
+      if (vendidos[n]) {
+        b.disabled = true;
+        b.setAttribute('aria-label', 'Número ' + n + ', indisponível');
+      } else {
+        b.setAttribute('aria-pressed', selecionados[n] ? 'true' : 'false');
+        b.setAttribute('aria-label', 'Número ' + n);
+      }
+      grade.appendChild(b);
+    }
+    resumo();
+  }
+
+  function resumo() {
+    var q = listaSel().length;
+    $('qtd').textContent = q;
+    $('total').textContent = moeda(q * (cfg ? cfg.valor : 0));
+    $('btnConfirmar').disabled = q === 0;
+  }
+
+  $('grade').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b || b.disabled) return;
+    var n = Number(b.dataset.n);
+    if (selecionados[n]) { delete selecionados[n]; b.setAttribute('aria-pressed', 'false'); }
+    else { selecionados[n] = true; b.setAttribute('aria-pressed', 'true'); }
+    resumo();
+  });
+
+  // Etapa 1: confirmar numeros -> mostra valor e forma de pagamento
+  $('btnConfirmar').addEventListener('click', function () {
+    var nums = listaSel();
+    if (!nums.length) return;
+    $('j1nums').textContent = nums.join(', ');
+    $('j1valor').textContent = moeda(nums.length * cfg.valor);
+    $('j1pix').textContent = cfg.chavePix;
+    $('j1fav').textContent = cfg.favorecido;
+    $('j1instr').textContent = cfg.instrucoes;
+    abrir('j1');
+  });
+  $('j1voltar').addEventListener('click', function () { fechar('j1'); });
+  $('j1copiar').addEventListener('click', function () {
+    var btn = $('j1copiar');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(cfg.chavePix).then(function () {
+        btn.textContent = 'Copiado!';
+        setTimeout(function () { btn.textContent = 'Copiar chave PIX'; }, 2000);
+      });
+    }
+  });
+
+  // Etapa 2: nova janela aguardando o comprovante
+  $('j1avancar').addEventListener('click', function () {
+    fechar('j1');
+    $('erro').textContent = '';
+    abrir('j2');
+    $('nome').focus();
+  });
+  $('j2voltar').addEventListener('click', function () { if (!enviando) { fechar('j2'); abrir('j1'); } });
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (enviando) return;
+    var erro = $('erro');
+    var nome = $('nome').value.trim();
+    var arq = $('arquivo').files[0];
+    if (!nome) { erro.textContent = 'Informe seu nome.'; $('nome').focus(); return; }
+    if (!arq) { erro.textContent = 'Anexe o comprovante de pagamento.'; $('arquivo').focus(); return; }
+    if (arq.size > 5 * 1024 * 1024) { erro.textContent = 'O comprovante deve ter no máximo 5 MB.'; return; }
+
+    var nums = listaSel();
+    var fd = new FormData();
+    fd.append('numeros', nums.join(','));
+    fd.append('nome', nome);
+    fd.append('contato', $('contato').value.trim());
+    fd.append('comprovante', arq);
+
+    enviando = true;
+    $('j2enviar').disabled = true;
+    $('j2enviar').textContent = 'Enviando...';
+    erro.textContent = '';
+
+    fetch('api.ashx?action=comprar', { method: 'POST', body: fd })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+      .then(function (res) {
+        if (res.d.ok) {
+          $('j3nums').textContent = nums.join(', ');
+          selecionados = {};
+          fechar('j2');
+          abrir('j3');
+          $('form').reset();
+          return carregar(false);
+        }
+        if (res.status === 409) {
+          (res.d.conflitos || []).forEach(function (n) { delete selecionados[n]; });
+          fechar('j2');
+          return carregar(false).then(function () {
+            alert('Os números ' + (res.d.conflitos || []).join(', ') + ' acabaram de ser reservados por outra pessoa. Escolha outros e tente novamente.');
+          });
+        }
+        erro.textContent = res.d.erro || 'Não foi possível concluir. Tente novamente.';
+      })
+      .catch(function () { erro.textContent = 'Falha de conexão. Tente novamente.'; })
+      .then(function () {
+        enviando = false;
+        $('j2enviar').disabled = false;
+        $('j2enviar').textContent = 'Confirmar pagamento';
+      });
+  });
+
+  $('j3fechar').addEventListener('click', function () { fechar('j3'); });
+
+  carregar(true);
+  // Atualiza numeros vendidos por outros usuarios
+  setInterval(function () { if (!enviando && !document.querySelector('.fundo.aberto')) carregar(false); }, 20000);
+})();
+</script>
+</body>
+</html>

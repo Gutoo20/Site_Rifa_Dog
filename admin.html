@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Administração da Rifa</title>
+<style>
+  :root { --azul:#1f5fbf; --vermelho:#b3261e; --verde:#1b8a4b; }
+  * { box-sizing: border-box; }
+  body { font-family: Segoe UI, Arial, sans-serif; margin:0; background:#f4f6f9; color:#1d2530; }
+  header { background:#27313f; color:#fff; padding:1rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:1.3rem; }
+  main { max-width:1100px; margin:0 auto; padding:1rem; }
+  .btn { padding:.55rem 1.1rem; font-size:1rem; border:0; border-radius:6px; background:var(--azul); color:#fff; cursor:pointer; }
+  .btn.sec { background:#fff; color:var(--azul); border:1px solid var(--azul); }
+  .btn.perigo { background:var(--vermelho); }
+  .btn:disabled { background:#9aa5b5; cursor:not-allowed; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline:3px solid #ffb703; outline-offset:2px; }
+  #login { max-width:340px; margin:4rem auto; background:#fff; padding:1.5rem; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.15); }
+  #login label { display:block; margin-bottom:.3rem; font-weight:600; }
+  input[type=password], input[type=search], input[type=text] { width:100%; padding:.55rem; font-size:1rem; border:1px solid #8a94a3; border-radius:6px; }
+  .erro { color:var(--vermelho); min-height:1.3rem; margin:.6rem 0 0; }
+  .resumo { display:flex; gap:1.5rem; flex-wrap:wrap; margin:.5rem 0 1rem; }
+  .resumo div { background:#fff; border-radius:8px; padding:.7rem 1rem; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .resumo strong { font-size:1.4rem; display:block; }
+  .tools { display:flex; gap:.6rem; margin-bottom:1rem; flex-wrap:wrap; }
+  .tools input { flex:1; min-width:200px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  th, td { text-align:left; padding:.6rem .7rem; border-bottom:1px solid #e3e7ed; vertical-align:top; }
+  th { background:#e9edf3; font-size:.9rem; }
+  .nums { display:flex; flex-wrap:wrap; gap:.35rem; }
+  .nums label { display:inline-flex; align-items:center; gap:.25rem; border:1px solid #8a94a3; border-radius:5px; padding:.15rem .45rem; cursor:pointer; background:#fff; }
+  .nums label:has(input:checked) { background:#fdeaea; border-color:var(--vermelho); }
+  .vazio { color:#7a828d; font-style:italic; }
+  tr.liberada { opacity:.6; }
+  @media (max-width: 720px) { thead { display:none; } tr, td { display:block; } td { border:0; padding:.3rem .7rem; } tr { border-bottom:1px solid #cfd5de; padding:.4rem 0; } td::before { content:attr(data-r) ": "; font-weight:600; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Administração da Rifa</h1>
+  <button class="btn sec" id="btnSair" hidden>Sair</button>
+</header>
+
+<main>
+  <form id="login" hidden>
+    <label for="usuario">Usuário</label>
+    <input type="text" id="usuario" autocomplete="username" required />
+    <label for="senha" style="margin-top:.8rem">Senha</label>
+    <input type="password" id="senha" autocomplete="current-password" required />
+    <p class="erro" id="erroLogin" role="alert"></p>
+    <button class="btn" type="submit" id="btnEntrar">Entrar</button>
+  </form>
+
+  <section id="painel" hidden>
+    <div class="resumo" aria-live="polite">
+      <div><strong id="rVendidos">0</strong>números vendidos</div>
+      <div><strong id="rLivres">0</strong>números livres</div>
+      <div><strong id="rCompras">0</strong>compras</div>
+    </div>
+    <div class="tools">
+      <label for="busca" class="vazio" style="align-self:center">Buscar:</label>
+      <input type="search" id="busca" placeholder="nome, contato ou número" />
+      <button class="btn sec" id="btnAtualizar" type="button">Atualizar</button>
+    </div>
+    <p class="erro" id="erroPainel" role="alert"></p>
+    <table>
+      <thead><tr><th>Data</th><th>Nome</th><th>Contato</th><th>Números</th><th>Comprovante</th><th>Ação</th></tr></thead>
+      <tbody id="corpo"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var compras = [];
+  var CAB = { 'X-Requested-With': 'XMLHttpRequest' };
+
+  function api(acao, corpo) {
+    var opt = corpo ? { method: 'POST', headers: CAB, body: corpo, credentials: 'same-origin' }
+                    : { headers: CAB, credentials: 'same-origin', cache: 'no-store' };
+    return fetch('admin.ashx?action=' + acao, opt).then(function (r) {
+      return r.json().then(function (d) { d.status = r.status; return d; });
+    });
+  }
+
+  function mostrar(logado) {
+    $('login').hidden = logado;
+    $('painel').hidden = !logado;
+    $('btnSair').hidden = !logado;
+    if (logado) carregar(); else $('usuario').focus();
+  }
+
+  function carregar() {
+    $('erroPainel').textContent = '';
+    api('lista').then(function (d) {
+      if (d.status === 401) { mostrar(false); return; }
+      if (!d.ok) { $('erroPainel').textContent = d.erro; return; }
+      compras = d.compras;
+      $('rVendidos').textContent = d.vendidos;
+      $('rLivres').textContent = d.total - d.vendidos;
+      $('rCompras').textContent = d.compras.length;
+      desenhar();
+    }).catch(function () { $('erroPainel').textContent = 'Falha de conexão.'; });
+  }
+
+  function desenhar() {
+    var termo = $('busca').value.trim().toLowerCase();
+    var corpo = $('corpo');
+    corpo.innerHTML = '';
+    compras.forEach(function (c) {
+      var texto = (c.nome + ' ' + c.contato + ' ' + c.numeros.join(' ')).toLowerCase();
+      if (termo && texto.indexOf(termo) === -1) return;
+
+      var tr = document.createElement('tr');
+      if (!c.numeros.length) tr.className = 'liberada';
+
+      function td(rotulo) { var t = document.createElement('td'); t.setAttribute('data-r', rotulo); tr.appendChild(t); return t; }
+      td('Data').textContent = c.data;
+      td('Nome').textContent = c.nome;
+      td('Contato').textContent = c.contato || '—';
+
+      var tdNums = td('Números');
+      var checks = [];
+      if (c.numeros.length) {
+        var box = document.createElement('div'); box.className = 'nums';
+        c.numeros.forEach(function (n) {
+          var l = document.createElement('label');
+          var i = document.createElement('input'); i.type = 'checkbox'; i.value = n;
+          l.appendChild(i); l.appendChild(document.createTextNode(n));
+          box.appendChild(l); checks.push(i);
+        });
+        tdNums.appendChild(box);
+      } else {
+        tdNums.innerHTML = '<span class="vazio">todos liberados</span>';
+      }
+
+      var tdArq = td('Comprovante');
+      if (c.temComprovante) {
+        var a = document.createElement('a');
+        a.href = 'admin.ashx?action=comprovante&id=' + encodeURIComponent(c.id);
+        a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.textContent = 'Abrir';
+        tdArq.appendChild(a);
+      } else { tdArq.innerHTML = '<span class="vazio">indisponível</span>'; }
+
+      var tdAcao = td('Ação');
+      if (c.numeros.length) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn perigo'; b.textContent = 'Liberar marcados';
+        b.addEventListener('click', function () {
+          var sel = checks.filter(function (x) { return x.checked; }).map(function (x) { return x.value; });
+          if (!sel.length) { alert('Marque os números que deseja liberar.'); return; }
+          if (!confirm('Liberar os números ' + sel.join(', ') + ' de ' + c.nome + '?\nEles voltarão a ficar disponíveis no site.')) return;
+          b.disabled = true;
+          var fd = new FormData(); fd.append('id', c.id); fd.append('numeros', sel.join(','));
+          api('liberar', fd).then(function (d) {
+            if (d.status === 401) { mostrar(false); return; }
+            if (!d.ok) { alert(d.erro); b.disabled = false; return; }
+            carregar();
+          }).catch(function () { alert('Falha de conexão.'); b.disabled = false; });
+        });
+        tdAcao.appendChild(b);
+      }
+      corpo.appendChild(tr);
+    });
+    if (!corpo.children.length) {
+      var tr0 = document.createElement('tr'), t0 = document.createElement('td');
+      t0.colSpan = 6; t0.className = 'vazio'; t0.textContent = 'Nenhuma compra encontrada.';
+      tr0.appendChild(t0); corpo.appendChild(tr0);
+    }
+  }
+
+  $('login').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var fd = new FormData(); fd.append('usuario', $('usuario').value); fd.append('senha', $('senha').value);
+    $('btnEntrar').disabled = true; $('erroLogin').textContent = '';
+    api('login', fd).then(function (d) {
+      $('btnEntrar').disabled = false;
+      $('senha').value = '';
+      if (d.ok) mostrar(true); else $('erroLogin').textContent = d.erro || 'Falha no login.';
+    }).catch(function () { $('btnEntrar').disabled = false; $('erroLogin').textContent = 'Falha de conexão.'; });
+  });
+
+  $('btnSair').addEventListener('click', function () {
+    api('logout', new FormData()).then(function () { compras = []; mostrar(false); });
+  });
+  $('btnAtualizar').addEventListener('click', carregar);
+  $('busca').addEventListener('input', desenhar);
+
+  api('sessao').then(function (d) {
+    if (d.status === 503) { $('login').hidden = false; $('erroLogin').textContent = d.erro; $('btnEntrar').disabled = true; return; }
+    mostrar(!!d.autenticado);
+  }).catch(function () { mostrar(false); });
+})();
+</script>
+</body>
+</html>

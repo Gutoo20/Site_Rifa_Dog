@@ -1,0 +1,15 @@
+Esta pasta guarda os dados da rifa (nao e acessivel pela web):
+- vendidos.txt   : numeros ja travados (um por linha)
+- compras.txt    : quem comprou (id, data, nome, contato, numeros, arquivo)
+- comprovantes\  : comprovantes enviados (nome gerado pelo servidor)
+- liberacoes.log : historico das liberacoes feitas no admin
+
+Os numeros sao travados automaticamente assim que o e-mail com o comprovante
+e enviado. Nenhuma acao humana e necessaria.
+
+Excecao (comprovante falso/invalido): acesse admin.html, entre com a senha
+(AdminUsuario/AdminSenha no web.config), localize a compra e use "Liberar marcados".
+A alteracao vale na hora. Em ultimo caso, e possivel apagar a linha do numero
+em vendidos.txt (e tirar o numero da linha da compra em compras.txt).
+
+A conta do pool de aplicacao do IIS precisa de permissao de escrita nesta pasta.
